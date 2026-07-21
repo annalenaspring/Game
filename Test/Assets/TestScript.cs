@@ -5,7 +5,7 @@ public class TestScript : MonoBehaviour
     // Start is called once before the first execution of Update
     void Start()
     {
-        Debug.Log("Hallo! Auch aus der Ferne!");
+        Debug.Log("Zweiter Testlauf im Gange!");
     }
 
     // Update is called once per frame
