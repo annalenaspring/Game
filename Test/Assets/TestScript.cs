@@ -2,7 +2,7 @@ using UnityEngine;
 
 public class TestScript : MonoBehaviour
 {
-    // Start is called once before the first execution of Update
+    // Start is called once before the first execution of Updatessssssssss
     void Start()
     {
         Debug.Log("dritter Testlauf im Gange!");
@@ -11,6 +11,6 @@ public class TestScript : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-// hulubulu
+// hulubuluL
     }
 }
