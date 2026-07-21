@@ -13,4 +13,5 @@ public class TestScript : MonoBehaviour
     {
         
     }
+    Debug.Log("Hallo aus der Ferne!");
 }
