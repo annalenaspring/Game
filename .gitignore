@@ -1,3 +1,4 @@
-/Test/.idea
-Test/.idea/.idea.Test/.idea/workspace.xml
-/Test/.idea
+# IDE - JetBrains / Rider
+.idea/
+*.idea/
+**/.idea/
