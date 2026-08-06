@@ -18,6 +18,9 @@ public class LevelManager : MonoBehaviour
     public GameObject gameOverPanel;
     public GameObject winPanel;
 
+    [Header("Referenzen")]
+    public SnakeTrail snakeTrail;
+
     void Awake()
     {
         // Singleton-Pattern
@@ -39,6 +42,9 @@ public class LevelManager : MonoBehaviour
 
         CurrentState = GameState.GameOver;
         Debug.Log("GAME OVER");
+
+        if (snakeTrail != null)
+            snakeTrail.ClearTrail();
 
         if (gameOverPanel != null)
             gameOverPanel.SetActive(true);

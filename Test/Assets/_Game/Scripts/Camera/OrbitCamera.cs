@@ -3,7 +3,7 @@ using UnityEngine;
 /// <summary>
 /// Orbitalkamera – dreht sich um den Mittelpunkt der Komposition.
 /// Mobile: 1 Finger = drehen, 2 Finger = Zoom (Pinch)
-/// Editor: Rechte Maustaste = drehen, Scrollrad = Zoom
+/// Editor: Linker Maustaste/Trackpad-Drag = drehen, Scrollrad/Pinch = Zoom
 ///
 /// SETUP:
 ///   1. Dieses Script auf die Hauptkamera
@@ -62,18 +62,27 @@ public class OrbitCamera : MonoBehaviour
         UpdateCameraPosition();
     }
 
-    // ── Editor: Maus ──────────────────────────────────────────
+    // ── Editor: Maus / Trackpad ───────────────────────────────
+    private Vector3 lastMousePos;
+
     void HandleMouseInput()
     {
-        // Rechte Maustaste gedrückt → drehen
-        if (Input.GetMouseButton(1))
+        // Linke Maustaste ODER Trackpad-Drag → drehen
+        if (Input.GetMouseButtonDown(0))
         {
-            azimuth   += Input.GetAxis("Mouse X") * orbitSensitivity * 10f;
-            elevation -= Input.GetAxis("Mouse Y") * orbitSensitivity * 10f;
-            elevation  = Mathf.Clamp(elevation, minElevation, maxElevation);
+            lastMousePos = Input.mousePosition;
         }
 
-        // Scrollrad → Zoom
+        if (Input.GetMouseButton(0))
+        {
+            Vector3 delta = Input.mousePosition - lastMousePos;
+            azimuth   += delta.x * orbitSensitivity;
+            elevation -= delta.y * orbitSensitivity;
+            elevation  = Mathf.Clamp(elevation, minElevation, maxElevation);
+            lastMousePos = Input.mousePosition;
+        }
+
+        // Scrollrad oder Trackpad-Pinch → Zoom
         float scroll = Input.GetAxis("Mouse ScrollWheel");
         if (Mathf.Abs(scroll) > 0.001f)
         {

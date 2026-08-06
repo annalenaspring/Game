@@ -8,11 +8,11 @@ using UnityEngine;
 ///
 /// SETUP:
 ///   1. GameObject mit Sphere/Mesh als Schlangenkopf
-///   2. Rigidbody hinzufügen: Gravity = false, Collision Detection = Continuous
-///   3. SphereCollider: Is Trigger = true, Tag = "Player"
+///   2. Rigidbody hinzufügen: Is Kinematic = true, Use Gravity = false
+///   3. SphereCollider: Is Trigger = true
 ///   4. Dieses Script hinzufügen
 ///   5. JoystickController-Objekt in "joystick" Feld ziehen
-///   6. SnakeTrail-Script auf gleiches GameObject (oder Kind-Objekt)
+///   6. SnakeTrail-Script auf gleiches GameObject
 /// </summary>
 [RequireComponent(typeof(Rigidbody))]
 public class SnakeHead : MonoBehaviour
@@ -32,29 +32,22 @@ public class SnakeHead : MonoBehaviour
     private float currentYaw;
     private float currentPitch;
 
-    private Rigidbody rb;
-
     void Awake()
     {
-        rb = GetComponent<Rigidbody>();
-        rb.useGravity = false;
-        rb.linearDamping = 0f;
-        rb.angularDamping = 0f;
-        rb.constraints = RigidbodyConstraints.FreezeRotation; // Physik dreht nicht, wir drehen selbst
+        // Kinematisch: Physics bewegt das Objekt nicht, wir steuern selbst
+        Rigidbody rb = GetComponent<Rigidbody>();
+        rb.isKinematic = true;
+        rb.useGravity  = false;
 
-        // Startrotation merken
         currentYaw   = transform.eulerAngles.y;
         currentPitch = transform.eulerAngles.x;
     }
 
-    void FixedUpdate()
+    void Update()
     {
         if (LevelManager.Instance != null &&
             LevelManager.Instance.CurrentState != GameState.Playing)
-        {
-            rb.linearVelocity = Vector3.zero;
             return;
-        }
 
         ApplyRotation();
         MoveForward();
@@ -66,22 +59,20 @@ public class SnakeHead : MonoBehaviour
 
         Vector2 input = joystick.GetInput();
 
-        // Yaw = Links/Rechts um Welt-Y-Achse (kein Roll)
-        // Pitch = Hoch/Runter um lokale X-Achse
-        currentYaw   += input.x * maxTurnRate * Time.fixedDeltaTime;
-        currentPitch -= input.y * maxTurnRate * Time.fixedDeltaTime;
+        currentYaw   += input.x * maxTurnRate * Time.deltaTime;
+        currentPitch -= input.y * maxTurnRate * Time.deltaTime;
 
-        // Pitch clampen damit die Schlange nicht auf den Kopf dreht
-        // Für "free 3D flight" diese Zeile auskommentieren
+        // Auskommentieren für vollständige 3D-Freiheit (auch über 90° Pitch)
         currentPitch = Mathf.Clamp(currentPitch, -85f, 85f);
 
-        // Rotation setzen – Z bleibt 0 → kein Roll
+        // Z = 0 → kein Roll
         transform.rotation = Quaternion.Euler(currentPitch, currentYaw, 0f);
     }
 
     void MoveForward()
     {
-        rb.linearVelocity = transform.forward * moveSpeed;
+        // transform.Translate: bewegt sich in lokaler Vorwärtsrichtung (hoch/runter inklusive)
+        transform.Translate(Vector3.forward * moveSpeed * Time.deltaTime);
     }
 
     // Kollision mit Spur oder Levelobjekten → Game Over
