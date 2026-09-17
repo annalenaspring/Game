@@ -28,19 +28,18 @@ public class SnakeHead : MonoBehaviour
     [Tooltip("Ziehe das JoystickController-Objekt hier rein")]
     public JoystickController joystick;
 
-    // Interne Rotation (kein Roll – nur Pitch und Yaw)
-    private float currentYaw;
-    private float currentPitch;
+    private Vector3 currentForward;
 
     void Awake()
     {
-        // Kinematisch: Physics bewegt das Objekt nicht, wir steuern selbst
         Rigidbody rb = GetComponent<Rigidbody>();
         rb.isKinematic = true;
         rb.useGravity  = false;
+    }
 
-        currentYaw   = transform.eulerAngles.y;
-        currentPitch = transform.eulerAngles.x;
+    void Start()
+    {
+        currentForward = transform.forward;
     }
 
     void Update()
@@ -58,15 +57,20 @@ public class SnakeHead : MonoBehaviour
         if (joystick == null) return;
 
         Vector2 input = joystick.GetInput();
+        float dt = Time.deltaTime;
 
-        currentYaw   += input.x * maxTurnRate * Time.deltaTime;
-        currentPitch -= input.y * maxTurnRate * Time.deltaTime;
+        // Vollständig lokale Rotation → Steuerung immer relativ zur Flugrichtung
+        transform.Rotate(Vector3.up,    input.x  * maxTurnRate * dt, Space.Self);
+        transform.Rotate(Vector3.right, -input.y * maxTurnRate * dt, Space.Self);
 
-        // Auskommentieren für vollständige 3D-Freiheit (auch über 90° Pitch)
-        currentPitch = Mathf.Clamp(currentPitch, -85f, 85f);
-
-        // Z = 0 → kein Roll
-        transform.rotation = Quaternion.Euler(currentPitch, currentYaw, 0f);
+        // Roll sanft korrigieren (kein harter Snap → keine Verwacklung)
+        Vector3 fwd = transform.forward;
+        Vector3 right = Vector3.Cross(Vector3.up, fwd).normalized;
+        if (right.magnitude > 0.1f)
+        {
+            Quaternion zielRot = Quaternion.LookRotation(fwd, Vector3.Cross(fwd, right));
+            transform.rotation = Quaternion.Slerp(transform.rotation, zielRot, 5f * dt);
+        }
     }
 
     void MoveForward()

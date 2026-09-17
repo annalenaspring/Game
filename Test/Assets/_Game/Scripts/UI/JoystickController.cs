@@ -23,9 +23,12 @@ public class JoystickController : MonoBehaviour
 
     void Update()
     {
-        // Im Unity-Editor: WASD-Steuerung zum Testen
+        // Im Unity-Editor: Pfeiltasten zum Testen (WASD bleibt frei)
         #if UNITY_EDITOR
-        currentInput = new Vector2(Input.GetAxis("Horizontal"), Input.GetAxis("Vertical"));
+        currentInput = new Vector2(
+            Input.GetKey(KeyCode.RightArrow) ? 1f : Input.GetKey(KeyCode.LeftArrow) ? -1f : 0f,
+            Input.GetKey(KeyCode.UpArrow)    ? 1f : Input.GetKey(KeyCode.DownArrow)  ? -1f : 0f
+        );
         return;
         #endif
 
