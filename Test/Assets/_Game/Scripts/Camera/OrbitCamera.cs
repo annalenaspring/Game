@@ -89,6 +89,11 @@ public class OrbitCamera : MonoBehaviour
             distance -= scroll * 10f;
             distance  = Mathf.Clamp(distance, minDistance, maxDistance);
         }
+
+        // Q / E Tasten → Zoom (Fallback wenn Scroll nicht geht)
+        if (Input.GetKey(KeyCode.E)) distance -= 10f * Time.deltaTime;
+        if (Input.GetKey(KeyCode.Q)) distance += 10f * Time.deltaTime;
+        distance = Mathf.Clamp(distance, minDistance, maxDistance);
     }
 
     // ── Mobile: Touch ─────────────────────────────────────────
