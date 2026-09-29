@@ -6,6 +6,7 @@ TagManager:
   tags:
   - Trail
   - LevelObject
+  - Bounty
   layers:
   - Default
   - TransparentFX
