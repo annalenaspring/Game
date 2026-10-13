@@ -79,12 +79,18 @@ public class SnakeHead : MonoBehaviour
         transform.Translate(Vector3.forward * moveSpeed * Time.deltaTime);
     }
 
-    // Kollision mit Spur oder Levelobjekten → Game Over
     void OnTriggerEnter(Collider other)
     {
+        // Spur oder Levelobjekt → Game Over
         if (other.CompareTag("Trail") || other.CompareTag("LevelObject"))
         {
             LevelManager.Instance?.GameOver();
+        }
+
+        // Bounty einsammeln
+        if (other.CompareTag("Bounty"))
+        {
+            other.GetComponent<BountyBase>()?.Collect();
         }
     }
 }
