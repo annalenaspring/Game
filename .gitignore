@@ -2,3 +2,7 @@
 .idea/
 *.idea/
 **/.idea/
+
+# Generated iPhone export (keep locally, rebuild from Unity)
+/Test/iOs_Prototype/
+/Test/iOs_Prototype.meta

@@ -1,89 +1,159 @@
 using UnityEngine;
 
-/// <summary>
-/// Virtueller Joystick – erkennt Touches auf der linken Bildschirmhälfte.
-/// Kein UI-Element nötig, funktioniert rein über Touch-Koordinaten.
-///
-/// SETUP: Leeres GameObject in der Szene, dieses Script drauf.
-///        In SnakeHead.cs das Feld "joystick" auf dieses Objekt ziehen.
-/// </summary>
+/// <summary>Bottom third: snake. Upper area: orbit/pinch. Roles are fixed at touch-down.</summary>
+[DefaultExecutionOrder(-100)]
 public class JoystickController : MonoBehaviour
 {
-    [Header("Einstellungen")]
-    [Tooltip("Maximaler Radius des Joysticks in Pixeln")]
-    public float maxRadius = 100f;
+    [Header("Steuerung")]
+    [Min(1f)] public float maxRadius = 100f;
+    [Range(0f, 1f)] public float deadzone = 0.1f;
+    [Range(0.1f, 0.8f)] public float steeringScreenFraction = 1f / 3f;
+    public Rect MiniViewRect { get; set; }
+    public bool HasMiniView { get; set; }
+    public Vector2 CameraDelta { get; private set; }
+    public float ZoomDelta { get; private set; }
+    public bool ViewSwapRequested { get; private set; }
 
-    [Tooltip("Toter Bereich: unter diesem Wert wird nichts gesendet (0–1)")]
-    public float deadzone = 0.1f;
-
-    // Interner State
-    private int     activeTouchId   = -1;
-    private Vector2 touchStartPos   = Vector2.zero;
-    private Vector2 currentInput    = Vector2.zero;
+    private int joystickFinger = -1, cameraFinger = -1, zoomFinger = -1, miniFinger = -1;
+    private int previousCameraCount;
+    private Vector2 origin, currentInput, miniOrigin;
+    private float miniStarted;
+    private bool miniMoved, mouseOrbit, mouseMini;
+    private Vector2 lastMouse;
 
     void Update()
     {
-        // Im Unity-Editor: Pfeiltasten zum Testen (WASD bleibt frei)
-        #if UNITY_EDITOR
-        currentInput = new Vector2(
-            Input.GetKey(KeyCode.RightArrow) ? 1f : Input.GetKey(KeyCode.LeftArrow) ? -1f : 0f,
-            Input.GetKey(KeyCode.UpArrow)    ? 1f : Input.GetKey(KeyCode.DownArrow)  ? -1f : 0f
-        );
-        return;
-        #endif
-
-        HandleTouch();
+        if (LevelManager.Instance != null && LevelManager.Instance.CurrentState == GameState.Won)
+        {
+            ResetInput();
+            return;
+        }
+#if UNITY_EDITOR || UNITY_STANDALONE
+        ProcessMouse();
+#else
+        ProcessTouches(Input.touches);
+#endif
+        // The snake stays stopped; orbit and pinch remain available after death.
+        if (LevelManager.Instance != null && LevelManager.Instance.CurrentState == GameState.GameOver)
+        {
+            currentInput = Vector2.zero;
+            ViewSwapRequested = false;
+        }
     }
 
-    void HandleTouch()
+    internal void ProcessTouches(Touch[] touches)
     {
-        foreach (Touch touch in Input.touches)
+        CameraDelta = Vector2.zero;
+        ZoomDelta = 0f;
+        ViewSwapRequested = false;
+
+        // Finish mini-view taps before releasing their finger ID.
+        foreach (Touch t in touches)
         {
-            // Nur Touches auf der linken Bildschirmhälfte
-            bool isLeftSide = touch.position.x < Screen.width * 0.5f;
+            if (t.fingerId != miniFinger) continue;
+            miniMoved |= Vector2.Distance(t.position, miniOrigin) > 20f;
+            if (t.phase == TouchPhase.Ended && !miniMoved && HasMiniView &&
+                MiniViewRect.Contains(t.position) && Time.unscaledTime - miniStarted <= 0.5f)
+                ViewSwapRequested = true;
+        }
+        if (!IsHeld(touches, miniFinger)) miniFinger = -1;
+        if (!IsHeld(touches, joystickFinger)) { joystickFinger = -1; currentInput = Vector2.zero; }
+        if (!IsHeld(touches, cameraFinger)) cameraFinger = -1;
+        if (!IsHeld(touches, zoomFinger)) zoomFinger = -1;
 
-            if (touch.phase == TouchPhase.Began && activeTouchId == -1 && isLeftSide)
+        // Only Began assigns a role: crossing a boundary never changes it.
+        foreach (Touch t in touches)
+        {
+            if (t.phase != TouchPhase.Began) continue;
+            if (HasMiniView && MiniViewRect.Contains(t.position))
             {
-                activeTouchId = touch.fingerId;
-                touchStartPos = touch.position;
-            }
-
-            if (touch.fingerId == activeTouchId)
-            {
-                if (touch.phase == TouchPhase.Moved || touch.phase == TouchPhase.Stationary)
+                if (miniFinger == -1)
                 {
-                    Vector2 delta = touch.position - touchStartPos;
-                    Vector2 clamped = Vector2.ClampMagnitude(delta, maxRadius);
-                    currentInput = clamped / maxRadius; // normalisiert auf -1 bis 1
-
-                    // Toter Bereich
-                    if (currentInput.magnitude < deadzone)
-                        currentInput = Vector2.zero;
-                }
-
-                if (touch.phase == TouchPhase.Ended || touch.phase == TouchPhase.Canceled)
-                {
-                    activeTouchId = -1;
-                    currentInput  = Vector2.zero;
+                    miniFinger = t.fingerId; miniOrigin = t.position;
+                    miniStarted = Time.unscaledTime; miniMoved = false;
                 }
             }
+            else if (t.position.y < Screen.height * steeringScreenFraction)
+            {
+                if (joystickFinger == -1) { joystickFinger = t.fingerId; origin = t.position; }
+            }
+            else if (cameraFinger == -1) cameraFinger = t.fingerId;
+            else if (zoomFinger == -1) zoomFinger = t.fingerId;
         }
 
-        // Kein aktiver Touch → Input zurücksetzen
-        if (activeTouchId != -1)
+        Touch first = default, second = default;
+        int cameraCount = 0;
+        bool cameraBegan = false;
+        foreach (Touch t in touches)
         {
-            bool stillActive = false;
-            foreach (Touch t in Input.touches)
-                if (t.fingerId == activeTouchId) { stillActive = true; break; }
-            if (!stillActive) { activeTouchId = -1; currentInput = Vector2.zero; }
+            if (t.phase == TouchPhase.Ended || t.phase == TouchPhase.Canceled) continue;
+            if (t.fingerId == joystickFinger)
+            {
+                currentInput = Vector2.ClampMagnitude((t.position - origin) / Mathf.Max(1f, maxRadius), 1f);
+                if (currentInput.magnitude < deadzone) currentInput = Vector2.zero;
+            }
+            else if (t.fingerId == cameraFinger || t.fingerId == zoomFinger)
+            {
+                if (cameraCount++ == 0) first = t; else second = t;
+                cameraBegan |= t.phase == TouchPhase.Began;
+            }
         }
+        // Rebase when switching between drag and pinch; no transition jumps.
+        if (!cameraBegan && cameraCount == previousCameraCount)
+        {
+            if (cameraCount == 1) CameraDelta = first.deltaPosition;
+            else if (cameraCount == 2)
+                ZoomDelta = Vector2.Distance(first.position, second.position) -
+                    Vector2.Distance(first.position - first.deltaPosition, second.position - second.deltaPosition);
+        }
+        previousCameraCount = cameraCount;
     }
 
-    /// <summary>
-    /// Gibt den aktuellen Joystick-Input zurück.
-    /// x = Links (-1) / Rechts (+1)
-    /// y = Runter (-1) / Hoch (+1)
-    /// Magnitude ist maximal 1.
-    /// </summary>
+    private void ProcessMouse()
+    {
+        CameraDelta = Vector2.zero; ZoomDelta = 0f; ViewSwapRequested = false;
+        currentInput = Vector2.ClampMagnitude(new Vector2(
+            Input.GetKey(KeyCode.RightArrow) ? 1f : Input.GetKey(KeyCode.LeftArrow) ? -1f : 0f,
+            Input.GetKey(KeyCode.UpArrow) ? 1f : Input.GetKey(KeyCode.DownArrow) ? -1f : 0f), 1f);
+        Vector2 position = Input.mousePosition;
+        bool overMini = HasMiniView && MiniViewRect.Contains(position);
+        if (Input.GetMouseButtonDown(0))
+        {
+            mouseMini = overMini; miniOrigin = position; miniStarted = Time.unscaledTime; miniMoved = false;
+            mouseOrbit = !overMini && position.y >= Screen.height * steeringScreenFraction;
+            lastMouse = position;
+        }
+        if (Input.GetMouseButton(0))
+        {
+            miniMoved |= Vector2.Distance(position, miniOrigin) > 20f;
+            if (mouseOrbit) CameraDelta = position - lastMouse;
+            lastMouse = position;
+        }
+        if (Input.GetMouseButtonUp(0))
+        {
+            ViewSwapRequested = mouseMini && overMini && !miniMoved && Time.unscaledTime - miniStarted <= 0.5f;
+            mouseMini = mouseOrbit = false;
+        }
+        if (!overMini && position.y >= Screen.height * steeringScreenFraction)
+            ZoomDelta = Input.GetAxis("Mouse ScrollWheel") * 200f;
+    }
+
+    private static bool IsHeld(Touch[] touches, int id)
+    {
+        if (id < 0) return false;
+        foreach (Touch t in touches)
+            if (t.fingerId == id && t.phase != TouchPhase.Ended && t.phase != TouchPhase.Canceled) return true;
+        return false;
+    }
+
+    private void ResetInput()
+    {
+        joystickFinger = cameraFinger = zoomFinger = miniFinger = -1;
+        previousCameraCount = 0; mouseMini = mouseOrbit = false;
+        currentInput = CameraDelta = Vector2.zero; ZoomDelta = 0f; ViewSwapRequested = false;
+    }
+    void OnDisable() => ResetInput();
+    void OnApplicationFocus(bool focused) { if (!focused) ResetInput(); }
+    void OnApplicationPause(bool paused) { if (paused) ResetInput(); }
     public Vector2 GetInput() => currentInput;
 }

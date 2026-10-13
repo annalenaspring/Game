@@ -2,8 +2,8 @@ using UnityEngine;
 
 /// <summary>
 /// Orbitalkamera – dreht sich um den Mittelpunkt der Komposition.
-/// Mobile: 1 Finger = drehen, 2 Finger = Zoom (Pinch)
-/// Editor: Linker Maustaste/Trackpad-Drag = drehen, Scrollrad/Pinch = Zoom
+/// Mobile: Oberer Bildschirmbereich = drehen / Pinch-Zoom.
+/// Editor: Maus ziehen = drehen, Scrollrad = Zoom.
 ///
 /// SETUP:
 ///   1. Dieses Script auf die Hauptkamera
@@ -22,26 +22,29 @@ public class OrbitCamera : MonoBehaviour
     [Tooltip("Startwinkel vertikal (Grad) – 0 = Horizont, 90 = von oben")]
     public float startElevation = 25f;
     [Tooltip("Startabstand zum Zentrum")]
-    public float startDistance = 20f;
+    public float startDistance = 65f;
 
     [Header("Grenzen")]
     public float minElevation = 5f;
     public float maxElevation = 85f;
-    public float minDistance  = 5f;
-    public float maxDistance  = 50f;
+    public float minDistance = 5f;
+    public float maxDistance = 80f;
+    public float zoomSensitivity = 0.05f;
 
     [Header("Geschwindigkeit")]
     public float orbitSensitivity = 0.3f;
-    public float zoomSensitivity  = 0.05f;
+    [SerializeField] private JoystickController touchInput;
 
     // Intern
     private float azimuth;
     private float elevation;
     private float distance;
 
-    // Touch-State
-    private Vector2 lastSingleTouchPos;
-    private float   lastPinchDistance;
+    void Awake()
+    {
+        if (touchInput == null)
+            touchInput = FindAnyObjectByType<JoystickController>();
+    }
 
     void Start()
     {
@@ -49,96 +52,26 @@ public class OrbitCamera : MonoBehaviour
         elevation = startElevation;
         distance  = startDistance;
         UpdateCameraPosition();
+        var head = FindAnyObjectByType<SnakeHead>();
+        var mainCamera = GetComponent<Camera>();
+        if (head != null && mainCamera != null && touchInput != null)
+        {
+            var views = GetComponent<SnakeViewSwitcher>();
+            if (views == null) views = gameObject.AddComponent<SnakeViewSwitcher>();
+            views.Initialize(mainCamera, head.transform, touchInput);
+        }
     }
 
-    void Update()
+    void LateUpdate()
     {
-        #if UNITY_EDITOR
-        HandleMouseInput();
-        #else
-        HandleTouchInput();
-        #endif
-
+        if (touchInput != null)
+        {
+            Vector2 delta = touchInput.CameraDelta;
+            azimuth += delta.x * orbitSensitivity;
+            elevation = Mathf.Clamp(elevation - delta.y * orbitSensitivity, minElevation, maxElevation);
+            distance = Mathf.Clamp(distance - touchInput.ZoomDelta * zoomSensitivity, minDistance, maxDistance);
+        }
         UpdateCameraPosition();
-    }
-
-    // ── Editor: Maus / Trackpad ───────────────────────────────
-    private Vector3 lastMousePos;
-
-    void HandleMouseInput()
-    {
-        // Linke Maustaste ODER Trackpad-Drag → drehen
-        if (Input.GetMouseButtonDown(0))
-        {
-            lastMousePos = Input.mousePosition;
-        }
-
-        if (Input.GetMouseButton(0))
-        {
-            Vector3 delta = Input.mousePosition - lastMousePos;
-            azimuth   += delta.x * orbitSensitivity;
-            elevation -= delta.y * orbitSensitivity;
-            elevation  = Mathf.Clamp(elevation, minElevation, maxElevation);
-            lastMousePos = Input.mousePosition;
-        }
-
-        // Scrollrad oder Trackpad-Pinch → Zoom
-        float scroll = Input.GetAxis("Mouse ScrollWheel");
-        if (Mathf.Abs(scroll) > 0.001f)
-        {
-            distance -= scroll * 10f;
-            distance  = Mathf.Clamp(distance, minDistance, maxDistance);
-        }
-
-        // Q / E Tasten → Zoom (Fallback wenn Scroll nicht geht)
-        if (Input.GetKey(KeyCode.E)) distance -= 10f * Time.deltaTime;
-        if (Input.GetKey(KeyCode.Q)) distance += 10f * Time.deltaTime;
-        distance = Mathf.Clamp(distance, minDistance, maxDistance);
-    }
-
-    // ── Mobile: Touch ─────────────────────────────────────────
-    void HandleTouchInput()
-    {
-        int touchCount = Input.touchCount;
-
-        if (touchCount == 1)
-        {
-            Touch t = Input.GetTouch(0);
-
-            // Nur Touches auf der rechten Hälfte (links = Joystick)
-            if (t.position.x < Screen.width * 0.5f) return;
-
-            if (t.phase == TouchPhase.Began)
-            {
-                lastSingleTouchPos = t.position;
-            }
-            else if (t.phase == TouchPhase.Moved)
-            {
-                Vector2 delta = t.position - lastSingleTouchPos;
-                azimuth   += delta.x * orbitSensitivity;
-                elevation -= delta.y * orbitSensitivity;
-                elevation  = Mathf.Clamp(elevation, minElevation, maxElevation);
-                lastSingleTouchPos = t.position;
-            }
-        }
-        else if (touchCount == 2)
-        {
-            Touch t0 = Input.GetTouch(0);
-            Touch t1 = Input.GetTouch(1);
-            float pinchDist = Vector2.Distance(t0.position, t1.position);
-
-            if (t0.phase == TouchPhase.Began || t1.phase == TouchPhase.Began)
-            {
-                lastPinchDistance = pinchDist;
-            }
-            else
-            {
-                float delta = pinchDist - lastPinchDistance;
-                distance -= delta * zoomSensitivity;
-                distance  = Mathf.Clamp(distance, minDistance, maxDistance);
-                lastPinchDistance = pinchDist;
-            }
-        }
     }
 
     // ── Kameraposition berechnen ──────────────────────────────
