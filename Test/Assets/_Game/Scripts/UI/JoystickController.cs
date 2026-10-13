@@ -1,24 +1,19 @@
 using UnityEngine;
 
-/// <summary>Bottom third: snake. Upper area: orbit/pinch. Roles are fixed at touch-down.</summary>
+/// <summary>POV circle: snake. Everywhere else: orbit/pinch. Roles are fixed at touch-down.</summary>
 [DefaultExecutionOrder(-100)]
 public class JoystickController : MonoBehaviour
 {
     [Header("Steuerung")]
     [Min(1f)] public float maxRadius = 100f;
     [Range(0f, 1f)] public float deadzone = 0.1f;
-    [Range(0.1f, 0.8f)] public float steeringScreenFraction = 1f / 3f;
-    public Rect MiniViewRect { get; set; }
-    public bool HasMiniView { get; set; }
     public Vector2 CameraDelta { get; private set; }
     public float ZoomDelta { get; private set; }
-    public bool ViewSwapRequested { get; private set; }
 
-    private int joystickFinger = -1, cameraFinger = -1, zoomFinger = -1, miniFinger = -1;
+    private int joystickFinger = -1, cameraFinger = -1, zoomFinger = -1;
     private int previousCameraCount;
-    private Vector2 origin, currentInput, miniOrigin;
-    private float miniStarted;
-    private bool miniMoved, mouseOrbit, mouseMini;
+    private Vector2 origin, currentInput;
+    private bool mouseOrbit, mouseSteer;
     private Vector2 lastMouse;
 
     void Update()
@@ -37,7 +32,6 @@ public class JoystickController : MonoBehaviour
         if (LevelManager.Instance != null && LevelManager.Instance.CurrentState == GameState.GameOver)
         {
             currentInput = Vector2.zero;
-            ViewSwapRequested = false;
         }
     }
 
@@ -45,18 +39,7 @@ public class JoystickController : MonoBehaviour
     {
         CameraDelta = Vector2.zero;
         ZoomDelta = 0f;
-        ViewSwapRequested = false;
 
-        // Finish mini-view taps before releasing their finger ID.
-        foreach (Touch t in touches)
-        {
-            if (t.fingerId != miniFinger) continue;
-            miniMoved |= Vector2.Distance(t.position, miniOrigin) > 20f;
-            if (t.phase == TouchPhase.Ended && !miniMoved && HasMiniView &&
-                MiniViewRect.Contains(t.position) && Time.unscaledTime - miniStarted <= 0.5f)
-                ViewSwapRequested = true;
-        }
-        if (!IsHeld(touches, miniFinger)) miniFinger = -1;
         if (!IsHeld(touches, joystickFinger)) { joystickFinger = -1; currentInput = Vector2.zero; }
         if (!IsHeld(touches, cameraFinger)) cameraFinger = -1;
         if (!IsHeld(touches, zoomFinger)) zoomFinger = -1;
@@ -65,15 +48,7 @@ public class JoystickController : MonoBehaviour
         foreach (Touch t in touches)
         {
             if (t.phase != TouchPhase.Began) continue;
-            if (HasMiniView && MiniViewRect.Contains(t.position))
-            {
-                if (miniFinger == -1)
-                {
-                    miniFinger = t.fingerId; miniOrigin = t.position;
-                    miniStarted = Time.unscaledTime; miniMoved = false;
-                }
-            }
-            else if (t.position.y < Screen.height * steeringScreenFraction)
+            if (CanSteer && PortraitGameLayout.ContainsPov(t.position))
             {
                 if (joystickFinger == -1) { joystickFinger = t.fingerId; origin = t.position; }
             }
@@ -109,33 +84,31 @@ public class JoystickController : MonoBehaviour
         previousCameraCount = cameraCount;
     }
 
+    private bool CanSteer => LevelManager.Instance == null ||
+        LevelManager.Instance.CurrentState == GameState.Playing;
+
     private void ProcessMouse()
     {
-        CameraDelta = Vector2.zero; ZoomDelta = 0f; ViewSwapRequested = false;
-        currentInput = Vector2.ClampMagnitude(new Vector2(
-            Input.GetKey(KeyCode.RightArrow) ? 1f : Input.GetKey(KeyCode.LeftArrow) ? -1f : 0f,
-            Input.GetKey(KeyCode.UpArrow) ? 1f : Input.GetKey(KeyCode.DownArrow) ? -1f : 0f), 1f);
+        CameraDelta = Vector2.zero; ZoomDelta = 0f; currentInput = Vector2.zero;
         Vector2 position = Input.mousePosition;
-        bool overMini = HasMiniView && MiniViewRect.Contains(position);
+        bool overPov = CanSteer && PortraitGameLayout.ContainsPov(position);
         if (Input.GetMouseButtonDown(0))
         {
-            mouseMini = overMini; miniOrigin = position; miniStarted = Time.unscaledTime; miniMoved = false;
-            mouseOrbit = !overMini && position.y >= Screen.height * steeringScreenFraction;
-            lastMouse = position;
+            mouseSteer = overPov; mouseOrbit = !overPov;
+            origin = lastMouse = position;
         }
         if (Input.GetMouseButton(0))
         {
-            miniMoved |= Vector2.Distance(position, miniOrigin) > 20f;
             if (mouseOrbit) CameraDelta = position - lastMouse;
+            if (mouseSteer && CanSteer)
+            {
+                currentInput = Vector2.ClampMagnitude((position - origin) / Mathf.Max(1f, maxRadius), 1f);
+                if (currentInput.magnitude < deadzone) currentInput = Vector2.zero;
+            }
             lastMouse = position;
         }
-        if (Input.GetMouseButtonUp(0))
-        {
-            ViewSwapRequested = mouseMini && overMini && !miniMoved && Time.unscaledTime - miniStarted <= 0.5f;
-            mouseMini = mouseOrbit = false;
-        }
-        if (!overMini && position.y >= Screen.height * steeringScreenFraction)
-            ZoomDelta = Input.GetAxis("Mouse ScrollWheel") * 200f;
+        if (Input.GetMouseButtonUp(0)) mouseSteer = mouseOrbit = false;
+        if (!overPov) ZoomDelta = Input.GetAxis("Mouse ScrollWheel") * 200f;
     }
 
     private static bool IsHeld(Touch[] touches, int id)
@@ -148,9 +121,9 @@ public class JoystickController : MonoBehaviour
 
     private void ResetInput()
     {
-        joystickFinger = cameraFinger = zoomFinger = miniFinger = -1;
-        previousCameraCount = 0; mouseMini = mouseOrbit = false;
-        currentInput = CameraDelta = Vector2.zero; ZoomDelta = 0f; ViewSwapRequested = false;
+        joystickFinger = cameraFinger = zoomFinger = -1;
+        previousCameraCount = 0; mouseSteer = mouseOrbit = false;
+        currentInput = CameraDelta = Vector2.zero; ZoomDelta = 0f;
     }
     void OnDisable() => ResetInput();
     void OnApplicationFocus(bool focused) { if (!focused) ResetInput(); }

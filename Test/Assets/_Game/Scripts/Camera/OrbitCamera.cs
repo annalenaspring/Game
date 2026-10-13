@@ -1,64 +1,35 @@
 using UnityEngine;
 
-/// <summary>
-/// Orbitalkamera – dreht sich um den Mittelpunkt der Komposition.
-/// Mobile: Oberer Bildschirmbereich = drehen / Pinch-Zoom.
-/// Editor: Maus ziehen = drehen, Scrollrad = Zoom.
-///
-/// SETUP:
-///   1. Dieses Script auf die Hauptkamera
-///   2. levelCenter: Position des Stillleben-Mittelpunkts setzen
-///      (kann ein leeres GameObject sein, das du in der Mitte der Komposition platzierst)
-/// </summary>
+/// <summary>Full-screen orthographic overview, orbiting the scene centre.</summary>
+[RequireComponent(typeof(Camera))]
 public class OrbitCamera : MonoBehaviour
 {
-    [Header("Orbit-Zentrum")]
-    [Tooltip("Um diesen Punkt dreht sich die Kamera – leeres GameObject in Szenenmitte")]
     public Transform levelCenter;
-
-    [Header("Startposition")]
-    [Tooltip("Startwinkel horizontal (Grad)")]
-    public float startAzimuth = 0f;
-    [Tooltip("Startwinkel vertikal (Grad) – 0 = Horizont, 90 = von oben")]
-    public float startElevation = 25f;
-    [Tooltip("Startabstand zum Zentrum")]
-    public float startDistance = 65f;
-
-    [Header("Grenzen")]
-    public float minElevation = 5f;
-    public float maxElevation = 85f;
-    public float minDistance = 5f;
-    public float maxDistance = 80f;
-    public float zoomSensitivity = 0.05f;
-
-    [Header("Geschwindigkeit")]
-    public float orbitSensitivity = 0.3f;
+    public float startAzimuth = 0f, startElevation = 25f, startDistance = 65f;
+    public float minElevation = -85f, maxElevation = 85f;
+    [Header("Orthografischer Bildausschnitt")]
+    public float startHalfWidth = 24f;
+    public float minHalfWidth = 5f, maxHalfWidth = 80f;
+    public float orbitSensitivity = 0.3f, zoomSensitivity = 0.05f;
     [SerializeField] private JoystickController touchInput;
-
-    // Intern
-    private float azimuth;
-    private float elevation;
-    private float distance;
-
-    void Awake()
-    {
-        if (touchInput == null)
-            touchInput = FindAnyObjectByType<JoystickController>();
-    }
+    private Camera overview;
+    private float azimuth, elevation, halfWidth;
 
     void Start()
     {
-        azimuth   = startAzimuth;
-        elevation = startElevation;
-        distance  = startDistance;
-        UpdateCameraPosition();
+        overview = GetComponent<Camera>();
+        if (touchInput == null) touchInput = FindAnyObjectByType<JoystickController>();
+        if (levelCenter == null) levelCenter = GameObject.Find("LevelCenter")?.transform;
+        azimuth = startAzimuth; elevation = startElevation; halfWidth = startHalfWidth;
+        overview.orthographic = true;
+        overview.rect = new Rect(0, 0, 1, 1);
+        ApplyPose();
         var head = FindAnyObjectByType<SnakeHead>();
-        var mainCamera = GetComponent<Camera>();
-        if (head != null && mainCamera != null && touchInput != null)
+        if (head != null && touchInput != null)
         {
             var views = GetComponent<SnakeViewSwitcher>();
             if (views == null) views = gameObject.AddComponent<SnakeViewSwitcher>();
-            views.Initialize(mainCamera, head.transform, touchInput);
+            views.Initialize(overview, head.transform, touchInput);
         }
     }
 
@@ -66,30 +37,24 @@ public class OrbitCamera : MonoBehaviour
     {
         if (touchInput != null)
         {
-            Vector2 delta = touchInput.CameraDelta;
-            azimuth += delta.x * orbitSensitivity;
-            elevation = Mathf.Clamp(elevation - delta.y * orbitSensitivity, minElevation, maxElevation);
-            distance = Mathf.Clamp(distance - touchInput.ZoomDelta * zoomSensitivity, minDistance, maxDistance);
+            azimuth = Mathf.Repeat(azimuth + touchInput.CameraDelta.x * orbitSensitivity, 360f);
+            elevation -= touchInput.CameraDelta.y * orbitSensitivity;
+            halfWidth = Mathf.Clamp(halfWidth - touchInput.ZoomDelta * zoomSensitivity, minHalfWidth, maxHalfWidth);
         }
-        UpdateCameraPosition();
+        ApplyPose();
     }
 
-    // ── Kameraposition berechnen ──────────────────────────────
-    void UpdateCameraPosition()
+    private void ApplyPose()
     {
-        Vector3 center = levelCenter != null ? levelCenter.position : Vector3.zero;
-
-        // Kugelkoordinaten → kartesisch
-        float azRad  = azimuth * Mathf.Deg2Rad;
-        float elRad  = elevation * Mathf.Deg2Rad;
-
-        Vector3 offset = new Vector3(
-            distance * Mathf.Cos(elRad) * Mathf.Sin(azRad),
-            distance * Mathf.Sin(elRad),
-            distance * Mathf.Cos(elRad) * Mathf.Cos(azRad)
-        );
-
-        transform.position = center + offset;
-        transform.LookAt(center);
+        elevation = Mathf.Clamp(elevation, Mathf.Max(-85f, minElevation), Mathf.Min(85f, maxElevation));
+        overview.aspect = (float)Mathf.Max(1, Screen.width) / Mathf.Max(1, Screen.height);
+        overview.orthographicSize = halfWidth / overview.aspect;
+        Quaternion rotation = Quaternion.Euler(elevation, azimuth + 180f, 0f);
+        Vector3 centre = levelCenter != null ? levelCenter.position : Vector3.zero;
+        Vector2 screenCentre = PortraitGameLayout.OverviewCenter;
+        // Translate the framing without changing the logical orbit pivot.
+        Vector3 framing = new Vector3((2f * screenCentre.x - 1f) * halfWidth,
+            (2f * screenCentre.y - 1f) * overview.orthographicSize, 0f);
+        transform.SetPositionAndRotation(centre - rotation * (Vector3.forward * startDistance + framing), rotation);
     }
 }
