@@ -1,51 +1,36 @@
 using UnityEngine;
-using UnityEngine.UI;
 
 /// <summary>
-/// Zeigt einen leuchtenden Punkt als Richtungsindikator wenn der Spieler
-/// den POV-Bereich berührt. Erscheint am Berührungspunkt, verschwindet beim Loslassen.
+/// Positioniert ein Particle System als Richtungsindikator für den Joystick.
+/// Erscheint nur wenn der POV-Bereich berührt wird.
 ///
 /// SETUP:
-///   1. Im Canvas ein neues Image erstellen (Hierarchy → Canvas → UI → Image)
-///   2. Image: Sprite = ein weiches Kreis-Sprite (oder Default UI Sprite)
-///      Color = weiss oder cyan, Raycast Target = false
-///   3. Dieses Script auf das Image-Objekt
-///   4. joystick-Feld auf den JoystickController ziehen
-///   5. dotImage-Feld auf dieses Image ziehen
-///
-/// TIPP für Glow: füge dem Image eine UI/Default Material mit Bloom hinzu,
-/// oder einfach eine helle HDR-Farbe (funktioniert gut mit URP Bloom PostProcess).
+///   1. Particle System aus dem Canvas rausnehmen → direkt in der Szene lassen
+///   2. Dieses Script auf das Particle System Objekt
+///   3. joystick-Feld auf den JoystickController ziehen
 /// </summary>
 public class JoystickVisual : MonoBehaviour
 {
     [Header("Referenzen")]
     public JoystickController joystick;
-    public Image dotImage;
 
     [Header("Einstellungen")]
-    [Tooltip("Wie weit der Punkt vom Ursprung wegbewegt wird (in Pixeln)")]
+    [Tooltip("Wie weit der Punkt vom Ursprung wegbewegt wird (in Pixeln auf dem Screen)")]
     public float visualRadius = 40f;
 
-    [Tooltip("Wie schnell der Punkt ein- und ausblendet")]
+    [Tooltip("Wie schnell der Effekt ein- und ausblendet")]
     public float fadeSpeed = 8f;
 
-    private CanvasGroup canvasGroup;
-    private RectTransform rectTransform;
-    private Canvas rootCanvas;
+    private ParticleSystem ps;
+    private Camera mainCam;
 
     void Awake()
     {
-        rectTransform = GetComponent<RectTransform>();
+        ps = GetComponent<ParticleSystem>();
+        mainCam = Camera.main;
 
-        // CanvasGroup für Fade
-        canvasGroup = GetComponent<CanvasGroup>();
-        if (canvasGroup == null)
-            canvasGroup = gameObject.AddComponent<CanvasGroup>();
-
-        canvasGroup.alpha = 0f;
-        canvasGroup.blocksRaycasts = false;
-
-        rootCanvas = GetComponentInParent<Canvas>();
+        // Beim Start: Partikel stoppen
+        if (ps != null) ps.Stop();
     }
 
     void Start()
@@ -56,29 +41,24 @@ public class JoystickVisual : MonoBehaviour
 
     void Update()
     {
-        bool active = joystick != null && joystick.IsJoystickActive;
+        if (joystick == null || ps == null) return;
 
-        // Ein- / Ausblenden
-        float targetAlpha = active ? 1f : 0f;
-        canvasGroup.alpha = Mathf.Lerp(canvasGroup.alpha, targetAlpha, fadeSpeed * Time.deltaTime);
+        bool active = joystick.IsJoystickActive;
+
+        // Particle System ein/ausschalten
+        if (active && !ps.isPlaying) ps.Play();
+        if (!active && ps.isPlaying)  ps.Stop();
 
         if (!active) return;
 
-        // Punkt an Ursprung + Richtung positionieren
-        Vector2 input = joystick.GetInput(); // -1 bis 1
-        Vector2 originScreen = joystick.JoystickOrigin;
+        // Screen-Position berechnen: Ursprung + Input-Richtung
+        Vector2 input      = joystick.GetInput();
+        Vector2 screenPos  = joystick.JoystickOrigin + input * visualRadius;
 
-        // Dot-Position = Ursprung + Input-Richtung * Radius
-        Vector2 dotScreenPos = originScreen + input * visualRadius;
+        // Screen → World Position (auf einer festen Tiefe vor der Kamera)
+        Vector3 worldPos = mainCam.ScreenToWorldPoint(
+            new Vector3(screenPos.x, screenPos.y, 2f)); // 2 Unity Units vor Kamera
 
-        // Screen → RectTransform Position umrechnen
-        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
-            rootCanvas.GetComponent<RectTransform>(),
-            dotScreenPos,
-            rootCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : Camera.main,
-            out Vector2 localPos))
-        {
-            rectTransform.localPosition = localPos;
-        }
+        transform.position = worldPos;
     }
 }
