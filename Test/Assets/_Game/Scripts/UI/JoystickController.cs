@@ -7,8 +7,11 @@ public class JoystickController : MonoBehaviour
     [Header("Steuerung")]
     [Min(1f)] public float maxRadius = 100f;
     [Range(0f, 1f)] public float deadzone = 0.1f;
-    public Vector2 CameraDelta { get; private set; }
-    public float ZoomDelta { get; private set; }
+    public Vector2 CameraDelta   { get; private set; }
+    public float   ZoomDelta     { get; private set; }
+    public bool    IsJoystickActive => joystickFinger >= 0 || mouseSteer;
+    public Vector2 JoystickOrigin   => origin;
+    public Vector2 JoystickCurrent  => IsJoystickActive ? (Vector2)Input.mousePosition : origin;
 
     private int joystickFinger = -1, cameraFinger = -1, zoomFinger = -1;
     private int previousCameraCount;
