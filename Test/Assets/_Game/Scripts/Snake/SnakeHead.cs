@@ -18,8 +18,14 @@ using UnityEngine;
 public class SnakeHead : MonoBehaviour
 {
     [Header("Bewegung")]
-    [Tooltip("Vorwärtsgeschwindigkeit in Unity-Units pro Sekunde")]
+    [Tooltip("Normale Vorwärtsgeschwindigkeit")]
     public float moveSpeed = 8f;
+
+    [Tooltip("Geschwindigkeit wenn Kamera bedient wird (0 = Stillstand)")]
+    public float cameraSlowSpeed = 1.5f;
+
+    [Tooltip("Wie sanft der Übergang ist (höher = schneller)")]
+    public float speedTransition = 3f;
 
     [Tooltip("Maximale Drehgeschwindigkeit in Grad pro Sekunde")]
     public float maxTurnRate = 100f;
@@ -29,6 +35,7 @@ public class SnakeHead : MonoBehaviour
     public JoystickController joystick;
 
     private Vector3 currentForward;
+    private float currentSpeed;
 
     void Awake()
     {
@@ -40,6 +47,7 @@ public class SnakeHead : MonoBehaviour
     void Start()
     {
         currentForward = transform.forward;
+        currentSpeed = moveSpeed;
     }
 
     void Update()
@@ -75,8 +83,14 @@ public class SnakeHead : MonoBehaviour
 
     void MoveForward()
     {
-        // transform.Translate: bewegt sich in lokaler Vorwärtsrichtung (hoch/runter inklusive)
-        transform.Translate(Vector3.forward * moveSpeed * Time.deltaTime);
+        // Kamera aktiv → verlangsamen, sonst normale Geschwindigkeit
+        bool cameraActive = joystick != null && joystick.CameraDelta.magnitude > 0.5f;
+        float targetSpeed = cameraActive ? cameraSlowSpeed : moveSpeed;
+
+        // Sanfter Übergang
+        currentSpeed = Mathf.Lerp(currentSpeed, targetSpeed, speedTransition * Time.deltaTime);
+
+        transform.Translate(Vector3.forward * currentSpeed * Time.deltaTime);
     }
 
     void OnTriggerEnter(Collider other)
