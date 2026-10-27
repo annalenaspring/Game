@@ -15,7 +15,9 @@ public static class PortraitGameLayout
 
     public static Vector2 OverviewCenter => new Vector2(
         Screen.safeArea.center.x / Mathf.Max(1, Screen.width),
-        (PovRect.yMax + Screen.safeArea.yMax) * 0.5f / Mathf.Max(1, Screen.height));
+        // Halfway from the old upper-area centre towards the screen centre.
+        Mathf.Lerp(0.5f,
+            (PovRect.yMax + Screen.safeArea.yMax) * 0.5f / Mathf.Max(1, Screen.height), 0.5f));
 
     public static bool ContainsPov(Vector2 point)
     {

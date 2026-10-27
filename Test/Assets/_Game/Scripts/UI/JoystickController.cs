@@ -21,18 +21,13 @@ public class JoystickController : MonoBehaviour
 
     void Update()
     {
-        if (LevelManager.Instance != null && LevelManager.Instance.CurrentState == GameState.Won)
-        {
-            ResetInput();
-            return;
-        }
 #if UNITY_EDITOR || UNITY_STANDALONE
         ProcessMouse();
 #else
         ProcessTouches(Input.touches);
 #endif
-        // The snake stays stopped; orbit and pinch remain available after death.
-        if (LevelManager.Instance != null && LevelManager.Instance.CurrentState == GameState.GameOver)
+        // Keep camera navigation available after both win and game over.
+        if (!CanSteer)
         {
             currentInput = Vector2.zero;
         }

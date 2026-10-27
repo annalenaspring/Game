@@ -343,7 +343,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::JoystickVisual
   joystick: {fileID: 0}
-  dotImage: {fileID: 0}
   visualRadius: 40
   fadeSpeed: 8
 --- !u!199 &151709351
@@ -6099,7 +6098,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: 1f8547f85ed7f4b30a67bc80f8375915, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 07d51d7119cd248b9a79b21791b9b9ff, type: 3}
   m_Type: 0
   m_PreserveAspect: 1
   m_FillCenter: 1
@@ -6274,7 +6273,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SnakeHead
   moveSpeed: 5
-  cameraSlowSpeed: 1.5
+  cameraSlowSpeed: 0.1
   speedTransition: 3
   maxTurnRate: 100
   joystick: {fileID: 2032518356}
