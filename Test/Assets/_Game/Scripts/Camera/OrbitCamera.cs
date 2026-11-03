@@ -12,6 +12,14 @@ public class OrbitCamera : MonoBehaviour
     public float minHalfWidth = 5f, maxHalfWidth = 80f;
     public float orbitSensitivity = 0.3f, zoomSensitivity = 0.05f;
     [SerializeField] private JoystickController touchInput;
+    [Header("Hintergrund nur in der Totale")]
+    public bool softenOverviewBackground = true;
+    [Range(0f, 1f)] public float backgroundBlur = 0.55f;
+    private Skybox overviewSky;
+    private Material softSkyMaterial;
+    private Material originalSkyMaterial;
+    private bool addedSkybox;
+    private bool originalSkyEnabled;
     private Camera overview;
     private float azimuth, elevation, halfWidth;
 
@@ -24,6 +32,7 @@ public class OrbitCamera : MonoBehaviour
         overview.orthographic = false;
         overview.rect = new Rect(0, 0, 1, 1);
         ApplyPose();
+        ConfigureBackground();
         var head = FindAnyObjectByType<SnakeHead>();
         if (head != null && touchInput != null)
         {
@@ -42,6 +51,60 @@ public class OrbitCamera : MonoBehaviour
             halfWidth = Mathf.Clamp(halfWidth - touchInput.ZoomDelta * zoomSensitivity, minHalfWidth, maxHalfWidth);
         }
         ApplyPose();
+        UpdateBackground();
+    }
+
+    private void ConfigureBackground()
+    {
+        overviewSky = GetComponent<Skybox>();
+        if (overviewSky != null)
+        {
+            originalSkyMaterial = overviewSky.material;
+            originalSkyEnabled = overviewSky.enabled;
+        }
+        Shader shader = Resources.Load<Shader>("SoftPanorama");
+        if (shader == null) return;
+        softSkyMaterial = new Material(shader) { name = "Overview blurred HDRI" };
+        if (overviewSky == null)
+        {
+            overviewSky = gameObject.AddComponent<Skybox>();
+            addedSkybox = true;
+        }
+        UpdateBackground();
+    }
+
+    private void UpdateBackground()
+    {
+        if (overviewSky == null || softSkyMaterial == null) return;
+        Material source = originalSkyEnabled && originalSkyMaterial != null
+            ? originalSkyMaterial : RenderSettings.skybox;
+        bool useBlur = softenOverviewBackground && source != null &&
+            source.HasProperty("_MainTex") && source.GetTexture("_MainTex") is Texture2D;
+        if (!useBlur)
+        {
+            overviewSky.material = originalSkyMaterial;
+            overviewSky.enabled = !addedSkybox && originalSkyEnabled;
+            return;
+        }
+        softSkyMaterial.SetTexture("_MainTex", source.GetTexture("_MainTex"));
+        softSkyMaterial.SetColor("_Tint", source.HasProperty("_Tint") ? source.GetColor("_Tint") : Color.gray);
+        softSkyMaterial.SetFloat("_Exposure", source.HasProperty("_Exposure") ? source.GetFloat("_Exposure") : 1f);
+        softSkyMaterial.SetFloat("_Rotation", source.HasProperty("_Rotation") ? source.GetFloat("_Rotation") : 0f);
+        softSkyMaterial.SetFloat("_Blur", backgroundBlur);
+        overviewSky.material = softSkyMaterial;
+        overviewSky.enabled = true;
+        // The global skybox stays unchanged for the POV, ambient light and reflections.
+        overview.clearFlags = CameraClearFlags.Skybox;
+    }
+
+    void OnDestroy()
+    {
+        if (overviewSky != null)
+        {
+            if (addedSkybox) Destroy(overviewSky);
+            else { overviewSky.material = originalSkyMaterial; overviewSky.enabled = originalSkyEnabled; }
+        }
+        if (softSkyMaterial != null) Destroy(softSkyMaterial);
     }
 
     private void ApplyPose()

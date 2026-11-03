@@ -5400,6 +5400,7 @@ MonoBehaviour:
   orbitSensitivity: 0.3
   zoomSensitivity: 0.05
   touchInput: {fileID: 0}
+  backgroundBlur: 0.55
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0
