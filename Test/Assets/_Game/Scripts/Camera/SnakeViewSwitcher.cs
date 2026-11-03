@@ -21,6 +21,8 @@ public class SnakeViewSwitcher : MonoBehaviour
         head = snakeHead;
         pov = new GameObject("Snake POV Camera").AddComponent<Camera>();
         pov.CopyFrom(orbit);
+        // The POV always uses the original environment, independent of the overview style.
+        pov.clearFlags = CameraClearFlags.Skybox;
         pov.orthographic = false;
         pov.fieldOfView = povFieldOfView;
         pov.nearClipPlane = 0.03f;

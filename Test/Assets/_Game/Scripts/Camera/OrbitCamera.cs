@@ -12,11 +12,15 @@ public class OrbitCamera : MonoBehaviour
     public float minHalfWidth = 5f, maxHalfWidth = 80f;
     public float orbitSensitivity = 0.3f, zoomSensitivity = 0.05f;
     [SerializeField] private JoystickController touchInput;
+    public enum OverviewBackground { White, Gradient, BlurredHdri, OriginalHdri }
     [Header("Hintergrund nur in der Totale")]
-    public bool softenOverviewBackground = true;
+    public OverviewBackground backgroundStyle = OverviewBackground.White;
+    public Color gradientTop = new Color(0.70f, 0.76f, 0.82f);
+    public Color gradientBottom = new Color(0.96f, 0.93f, 0.88f);
     [Range(0f, 1f)] public float backgroundBlur = 0.55f;
     private Skybox overviewSky;
     private Material softSkyMaterial;
+    private Material gradientMaterial;
     private Material originalSkyMaterial;
     private bool addedSkybox;
     private bool originalSkyEnabled;
@@ -63,8 +67,9 @@ public class OrbitCamera : MonoBehaviour
             originalSkyEnabled = overviewSky.enabled;
         }
         Shader shader = Resources.Load<Shader>("SoftPanorama");
-        if (shader == null) return;
-        softSkyMaterial = new Material(shader) { name = "Overview blurred HDRI" };
+        if (shader != null) softSkyMaterial = new Material(shader) { name = "Overview blurred HDRI" };
+        Shader gradientShader = Resources.Load<Shader>("OverviewGradient");
+        if (gradientShader != null) gradientMaterial = new Material(gradientShader) { name = "Overview gradient" };
         if (overviewSky == null)
         {
             overviewSky = gameObject.AddComponent<Skybox>();
@@ -75,10 +80,26 @@ public class OrbitCamera : MonoBehaviour
 
     private void UpdateBackground()
     {
-        if (overviewSky == null || softSkyMaterial == null) return;
+        if (overviewSky == null) return;
+        if (backgroundStyle == OverviewBackground.White)
+        {
+            overviewSky.enabled = false;
+            overview.clearFlags = CameraClearFlags.SolidColor;
+            overview.backgroundColor = Color.white;
+            return;
+        }
+        overview.clearFlags = CameraClearFlags.Skybox;
+        if (backgroundStyle == OverviewBackground.Gradient && gradientMaterial != null)
+        {
+            gradientMaterial.SetColor("_Top", gradientTop);
+            gradientMaterial.SetColor("_Bottom", gradientBottom);
+            overviewSky.material = gradientMaterial;
+            overviewSky.enabled = true;
+            return;
+        }
         Material source = originalSkyEnabled && originalSkyMaterial != null
             ? originalSkyMaterial : RenderSettings.skybox;
-        bool useBlur = softenOverviewBackground && source != null &&
+        bool useBlur = backgroundStyle == OverviewBackground.BlurredHdri && softSkyMaterial != null && source != null &&
             source.HasProperty("_MainTex") && source.GetTexture("_MainTex") is Texture2D;
         if (!useBlur)
         {
@@ -105,6 +126,7 @@ public class OrbitCamera : MonoBehaviour
             else { overviewSky.material = originalSkyMaterial; overviewSky.enabled = originalSkyEnabled; }
         }
         if (softSkyMaterial != null) Destroy(softSkyMaterial);
+        if (gradientMaterial != null) Destroy(gradientMaterial);
     }
 
     private void ApplyPose()
