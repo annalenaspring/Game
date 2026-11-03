@@ -119,8 +119,7 @@ public class LevelManager : MonoBehaviour
         replayFinger = -1;
         Debug.Log("GAME OVER");
 
-        if (snakeTrail != null)
-            snakeTrail.ClearTrail();
+        // Keep the completed sculpture visible until replay reloads the scene.
 
         if (gameOverPanel != null)
             gameOverPanel.SetActive(true);
